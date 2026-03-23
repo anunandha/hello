@@ -19,12 +19,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Install Maven
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y maven
-          mvn -version
-
       - name: Build with Maven
         run: mvn clean package
 
@@ -36,30 +30,34 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.war"
           target: "/home/ec2-user/deploy-temp"
-          strip_components: 0  # changed to 0 to avoid stripping directories
+          strip_components: 0
 
-      - name: Prepare Tomcat & Deploy WAR & Restart
+      - name: Deploy WAR and Restart Tomcat
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Extract Tomcat if not extracted yet
-            if [ ! -d /opt/tomcat ]; then
+            TOMCAT_DIR=/opt/tomcat
+            WAR_SOURCE=/home/ec2-user/deploy-temp/*.war
+
+            # Extract Tomcat if not already extracted
+            if [ ! -d "$TOMCAT_DIR" ]; then
               sudo tar -xzf /opt/apache-tomcat-10.1.52.tar.gz -C /opt
-              sudo mv /opt/apache-tomcat-10.1.52 /opt/tomcat
-              sudo chmod +x /opt/tomcat/bin/*.sh
+              sudo mv /opt/apache-tomcat-10.1.52 "$TOMCAT_DIR"
+              sudo chmod +x "$TOMCAT_DIR/bin/"*.sh
             fi
 
             # Stop Tomcat if running
             if pgrep -f 'org.apache.catalina.startup.Bootstrap'; then
-              sudo /opt/tomcat/bin/shutdown.sh
+              sudo "$TOMCAT_DIR/bin/shutdown.sh"
               sleep 5
             fi
 
-            # Copy WAR to Tomcat webapps folder as ROOT.war
-            sudo mv /home/ec2-user/deploy-temp/*.war /opt/tomcat/webapps/ROOT.war
+            # Deploy WAR as ROOT.war
+            sudo mv $WAR_SOURCE "$TOMCAT_DIR/webapps/ROOT.war"
+            sudo chown -R ec2-user:ec2-user "$TOMCAT_DIR/webapps/ROOT.war"
 
             # Start Tomcat
-            sudo /opt/tomcat/bin/startup.sh
+            sudo "$TOMCAT_DIR/bin/startup.sh"
