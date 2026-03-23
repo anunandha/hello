@@ -19,6 +19,13 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # ✅ Install Maven explicitly
+      - name: Install Maven
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y maven
+          mvn -version
+
       - name: Build with Maven
         run: mvn clean package
 
