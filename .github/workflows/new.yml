@@ -19,6 +19,70 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Install Maven
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y maven
+          mvn -version
+
+      - name: Build with Maven
+        run: mvn clean package
+
+      - name: Copy WAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "target/*.war"
+          target: "/home/ec2-user/deploy-temp"
+          strip_components: 0  # changed to 0 to avoid stripping directories
+
+      - name: Prepare Tomcat & Deploy WAR & Restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Extract Tomcat if not extracted yet
+            if [ ! -d /opt/tomcat ]; then
+              sudo tar -xzf /opt/apache-tomcat-10.1.52.tar.gz -C /opt
+              sudo mv /opt/apache-tomcat-10.1.52 /opt/tomcat
+              sudo chmod +x /opt/tomcat/bin/*.sh
+            fi
+
+            # Stop Tomcat if running
+            if pgrep -f 'org.apache.catalina.startup.Bootstrap'; then
+              sudo /opt/tomcat/bin/shutdown.sh
+              sleep 5
+            fi
+
+            # Copy WAR to Tomcat webapps folder as ROOT.war
+            sudo mv /home/ec2-user/deploy-temp/*.war /opt/tomcat/webapps/ROOT.war
+
+            # Start Tomcat
+            sudo /opt/tomcat/bin/startup.shname: Deploy WAR to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
       # ✅ Install Maven explicitly
       - name: Install Maven
         run: |
