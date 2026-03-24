@@ -39,8 +39,10 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
+
             TOMCAT_DIR=/opt/tomcat
-            WAR_SOURCE=/home/ec2-user/deploy-temp/*.war
+            WAR_SOURCE=$(ls /home/ec2-user/deploy-temp/*.war | head -n 1)
 
             # Extract Tomcat if not already extracted
             if [ ! -d "$TOMCAT_DIR" ]; then
@@ -50,14 +52,18 @@ jobs:
             fi
 
             # Stop Tomcat if running
-            if pgrep -f 'org.apache.catalina.startup.Bootstrap'; then
+            if pgrep -f 'org.apache.catalina.startup.Bootstrap' > /dev/null; then
               sudo "$TOMCAT_DIR/bin/shutdown.sh"
-              sleep 5
+              sleep 10
             fi
 
+            # Remove old ROOT app
+            sudo rm -rf "$TOMCAT_DIR/webapps/ROOT"
+            sudo rm -f "$TOMCAT_DIR/webapps/ROOT.war"
+
             # Deploy WAR as ROOT.war
-            sudo mv $WAR_SOURCE "$TOMCAT_DIR/webapps/ROOT.war"
-            sudo chown -R ec2-user:ec2-user "$TOMCAT_DIR/webapps/ROOT.war"
+            sudo mv "$WAR_SOURCE" "$TOMCAT_DIR/webapps/ROOT.war"
+            sudo chown ec2-user:ec2-user "$TOMCAT_DIR/webapps/ROOT.war"
 
             # Start Tomcat
             sudo "$TOMCAT_DIR/bin/startup.sh"
