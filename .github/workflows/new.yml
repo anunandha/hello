@@ -43,7 +43,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.war"
-          target: "/opt/tomcat/webapps/ROOT.war"
+          target: "/opt/tomcat/webapps/"
           strip_components: 1
 
       # Start Tomcat
