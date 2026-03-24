@@ -40,4 +40,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo mv /home/ec2-user/deploy-temp/*.war /opt/tomcat/webapps/ROOT.war
-            sudo systemctl restart tomcat
+            sudo /opt/tomcat/bin/shutdown.sh || true
+            sleep 5
+            sudo /opt/tomcat/bin/startup.sh
