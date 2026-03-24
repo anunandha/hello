@@ -22,6 +22,16 @@ jobs:
       - name: Build with Maven
         run: mvn clean package
 
+      # create directory on EC2 first
+      - name: Create deploy folder
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p /home/ec2-user/deploy-temp
+
       - name: Copy WAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -30,7 +40,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.war"
           target: "/home/ec2-user/deploy-temp"
-          strip_components: 0
 
       - name: Deploy WAR and Restart Tomcat
         uses: appleboy/ssh-action@v1.0.3
@@ -42,28 +51,24 @@ jobs:
             set -e
 
             TOMCAT_DIR=/opt/tomcat
-            WAR_SOURCE=$(ls /home/ec2-user/deploy-temp/*.war | head -n 1)
 
-            # Extract Tomcat if not already extracted
-            if [ ! -d "$TOMCAT_DIR" ]; then
-              sudo tar -xzf /opt/apache-tomcat-10.1.52.tar.gz -C /opt
-              sudo mv /opt/apache-tomcat-10.1.52 "$TOMCAT_DIR"
-              sudo chmod +x "$TOMCAT_DIR/bin/"*.sh
-            fi
+            WAR_FILE=$(ls /home/ec2-user/deploy-temp/*.war | head -n 1)
 
-            # Stop Tomcat if running
+            # Stop Tomcat
             if pgrep -f 'org.apache.catalina.startup.Bootstrap' > /dev/null; then
-              sudo "$TOMCAT_DIR/bin/shutdown.sh"
+              sudo $TOMCAT_DIR/bin/shutdown.sh
               sleep 10
             fi
 
-            # Remove old ROOT app
-            sudo rm -rf "$TOMCAT_DIR/webapps/ROOT"
-            sudo rm -f "$TOMCAT_DIR/webapps/ROOT.war"
+            # Remove old app
+            sudo rm -rf $TOMCAT_DIR/webapps/ROOT
+            sudo rm -f $TOMCAT_DIR/webapps/ROOT.war
 
-            # Deploy WAR as ROOT.war
-            sudo mv "$WAR_SOURCE" "$TOMCAT_DIR/webapps/ROOT.war"
-            sudo chown ec2-user:ec2-user "$TOMCAT_DIR/webapps/ROOT.war"
+            # Deploy new WAR
+            sudo mv $WAR_FILE $TOMCAT_DIR/webapps/ROOT.war
 
             # Start Tomcat
-            sudo "$TOMCAT_DIR/bin/startup.sh"
+            sudo $TOMCAT_DIR/bin/startup.sh
+
+            # cleanup
+            rm -f /home/ec2-user/deploy-temp/*.war
