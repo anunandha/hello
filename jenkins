@@ -1,82 +1,67 @@
 pipeline {
     agent any
 
-environment {
-        DOCKER_IMAGE = "binirosemaria/helloworld"
+    environment {
+        DOCKER_IMAGE = "anunandha/helloworld"
         DOCKER_TAG = "latest"
     }
 
-    
-stage('Build war') {
-            steps {
-                sh 'mvn clean package'
-            }
-        }
-stage('docker Installation') {
-            steps {
-               sh ''' sudo yum install docker -y
-                  sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker jenkins
-                ''' 
-            }
-        }
-stage('docker') {
-            steps {
-sh '''
-               docker build -t helloworld:latest  .
-'''
+    stages {
 
+        stage('Build WAR') {
+            steps {
+                sh 'mvn clean package -DskipTests'
             }
         }
 
-stage('Login to Docker Hub') {
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t $DOCKER_IMAGE:$DOCKER_TAG .
+                '''
+            }
+        }
+
+        stage('Login to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'DockerToken',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh """
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    """
-                }
-            }
-        }
-
-
-stage('Push Image') {
-            steps {
-                sh """
-                docker tag helloworld:latest binirosemaria/helloworld:latest
-                docker push $DOCKER_IMAGE:$DOCKER_TAG
-                """
-            }
-        }
-
-stage('Copy file to remote server - kubernetes machine') {
-            steps {
-                sshagent(['new']) {
                     sh '''
-        
-                        scp -o StrictHostKeyChecking=no manifest/*.yml ec2-user@13.208.42.249:/home/ec2-user/manifest/
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                     '''
                 }
             }
         }
 
-stage('run the kubectl') {
+        stage('Push Image') {
+            steps {
+                sh '''
+                    docker push $DOCKER_IMAGE:$DOCKER_TAG
+                '''
+            }
+        }
+
+        stage('Copy manifest to Kubernetes server') {
             steps {
                 sshagent(['new']) {
                     sh '''
-			ssh -o StrictHostKeyChecking=no ec2-user@10.0.1.224 "cd /home/ec2-user/manifest/ && kubectl apply -f ."
+                        scp -o StrictHostKeyChecking=no manifest/*.yml ec2-user@10.0.1.224:/home/ec2-user/manifest/
                     '''
                 }
             }
         }
 
-
-
-
+        stage('Deploy on Kubernetes') {
+            steps {
+                sshagent(['new']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ec2-user@10.0.1.224 "kubectl apply -f /home/ec2-user/manifest/"
+                    '''
+                }
+            }
+        }
     }
 }
