@@ -6,23 +6,7 @@ environment {
         DOCKER_TAG = "latest"
     }
 
-    stages {
-        stage('Git installation') {
-            steps {
-                //
-sh 'sudo yum install git -y'
-            }
-        }
-        stage('git clone') {
-            steps {
-                git branch: 'main', url: 'https://github.com/binirosemaria/Java.git'
-            }
-        }
-        stage('Maven installation') {
-            steps {
-                sh 'sudo yum install maven -y'
-            }
-        }
+    
 stage('Build war') {
             steps {
                 sh 'mvn clean package'
@@ -72,7 +56,7 @@ stage('Push Image') {
 
 stage('Copy file to remote server - kubernetes machine') {
             steps {
-                sshagent(['SSHToken']) {
+                sshagent(['new']) {
                     sh '''
         
                         scp -o StrictHostKeyChecking=no manifest/*.yml ec2-user@13.208.42.249:/home/ec2-user/manifest/
@@ -83,9 +67,9 @@ stage('Copy file to remote server - kubernetes machine') {
 
 stage('run the kubectl') {
             steps {
-                sshagent(['SSHToken']) {
+                sshagent(['new']) {
                     sh '''
-			ssh -o StrictHostKeyChecking=no ec2-user@13.208.42.249 "cd /home/ec2-user/manifest/ && kubectl apply -f ."
+			ssh -o StrictHostKeyChecking=no ec2-user@10.0.1.224 "cd /home/ec2-user/manifest/ && kubectl apply -f ."
                     '''
                 }
             }
